@@ -160,5 +160,4 @@ erDiagram
     DIM_SITE ||--o{ FACT_VIDEOSTART: place
     DIM_VIDEO ||--o{ FACT_VIDEOSTART : place
     }
-
-
+```
