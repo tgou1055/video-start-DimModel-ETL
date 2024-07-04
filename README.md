@@ -36,6 +36,9 @@ Use this raw data (video_data.csv) and construct a star schema Data Warehouse wh
 - Last piece of VideoTitle.split(‘|’) contains the video title.
 - You can ignore any middle pieces.
 
+
+## Tools and Hardwares
+
 **Tools**:
 *Platform*: AWS RDS service, AWS S3 bucket, AWS EC2 instance
 *Database*: MySQL
