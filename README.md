@@ -40,11 +40,9 @@ Use this raw data (video_data.csv) and construct a star schema Data Warehouse wh
 ## Tools and Hardwares
 
 **Tools**:
-*Platform*: AWS RDS service, AWS S3 bucket, AWS EC2 instance
-
-*Database*: MySQL
-
-*Loading/Auditing*: sqlldr
+- *Platform*: AWS RDS service, AWS S3 bucket, AWS EC2 instance
+- *Database*: MySQL
+- *Loading/Auditing*: sqlldr
 
 **Infrastructure**:
 
