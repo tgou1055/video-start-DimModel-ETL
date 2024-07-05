@@ -1,4 +1,4 @@
-# VideoStarts Dimension Modelling and ETL Process
+﻿# VideoStarts ETL Process
 
 ## Task Description:
 Use this raw data (video_data.csv) and construct a star schema Data Warehouse which will be used to track video start time. Show the SQL queries you would use to populate the Data Warehouse Dimensions and Fact table.
@@ -35,9 +35,6 @@ Use this raw data (video_data.csv) and construct a star schema Data Warehouse wh
 *DimVideo*:
 - Last piece of VideoTitle.split(‘|’) contains the video title.
 - You can ignore any middle pieces.
-
-
-## Tools and Hardwares
 
 **Tools**:
 - *Platform*: AWS RDS service, AWS S3 bucket, AWS EC2 instance
@@ -131,7 +128,6 @@ D --Ceate/Update tables --> C
 |DB_INSERT_TIME_STAMP|TIMESTAMP(6)|N|N|Null|5|TIMESTAMP when inserting the data|
 
 ---
-
 ### ER Diagram - STAR SCHEMA
 
 ```mermaid
@@ -160,6 +156,111 @@ erDiagram
     }
     DIM_DATE ||--o{ FACT_VIDEOSTART : place
     DIM_PLATFORM ||--o{ FACT_VIDEOSTART : place
-    DIM_SITE ||--o{ FACT_VIDEOSTART: place
+    DIM_SITE ||--o{ FACT_VIDEOSTART : place
     DIM_VIDEO ||--o{ FACT_VIDEOSTART : place
+```
+---
+## ETL Process Design
+
+### Data Staging and Filtering
+We implement the validation conditions to filtering out bad records in the raw data.
+
+1. Create a VIDEOSTRAT_RAW_STAGING table to load the raw data
+```sql
+CREATE TABLE VIDEOSTART_RAW_STAGING ( 
+  DATETIME  VARCHAR(30),
+  VIDEOTITLE  VARCHAR(200),
+  EVENTS  VARCHAR(150)
+);
+```
+2. Write a bash file to load raw data from local machine (or EC2 instance) to MYSQL database VIDEOSTART_RAW_STAGING table.
+
+```bash
+#!/bin/bash
+
+# MySQL connection details
+DB_HOST="database-3.c1i000w28fpm.ap-southeast-2.rds.amazonaws.com"
+DB_USER="admin"
+DB_NAME="Video_Data"
+DB_PWD="tim628716"  # remove it when upload to git
+
+# Path to your data file
+DATA_FILE="./video_data_small.csv"
+# Log files
+ERROR_FILE="./video_data_error.log"
+WARNING_FILE="./video_data_warning.log"
+
+# Clear previous error and warning logs
+> "$ERROR_FILE"
+> "$WARNING_FILE"
+
+# ESCAPED_BY STRING
+LINE_TERMINATE='\n'
+ESCAPED_BY='\\'
+
+# MySQL command to load data
+# Enter the RDS:MYSQL password on prompt (make sure `local-infile` = 1 on both client and server sides)
+mysql  --local-infile  -h  $DB_HOST  -u  $DB_USER  -p$DB_PWD  $DB_NAME <<EOF > $WARNING_FILE 2> $ERROR_FILE
+TRUNCATE TABLE VIDEOSTART_RAW_STAGING;
+LOAD DATA LOCAL INFILE '$DATA_FILE'
+INTO TABLE VIDEOSTART_RAW
+CHARACTER SET utf8
+FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '$ESCAPED_BY'
+LINES TERMINATED BY '$LINE_TERMINATE'
+IGNORE 1 LINES
+(DATETIME, VIDEOTITLE, EVENTS)
+SET DATETIME = NULLIF(DATETIME, ''),
+	VIDEOTITLE = NULLIF(VIDEOTITLE, ''),
+	EVENTS = NULLIF(EVENTS, '');
+EOF
+
+# `FIELDS TERMINATED BY ',' ` : specifies that the fields (columns) in the input data file are separated by commas.
+# `OPTIONALLY ENCLOSED BY '"' : specifies that fields in the data file may be enclosed in double quotes but are not required to be. It helps handle cases where fields contain commas or other special characters.
+# `ESCAPED BY '\\' `: defines the escape character for special characters like delimiters or enclosures
+
+# Check if there were errors
+if [ -s $ERROR_FILE ]; then
+	echo  "Errors occurred during data load. Check $ERROR_FILE for details."
+	cat  "$ERROR_FILE"  # Display the error log
+else
+	echo  "Data load completed successfully."
+fi
+```
+
+4. Create a VIDEOSTRAT_RAW table to load the raw data that satisfying validation conditions, and a REJECTED_RECORDS_LOGGING table to store the rejected records that failed the validation conditions.
+```sql
+CREATE TABLE VIDEOSTART_RAW ( 
+  DATETIME  VARCHAR(30),
+  VIDEOTITLE  VARCHAR(200),
+  EVENTS  VARCHAR(150)
+);
+CREATE TABLE REJECTED_RECORDS_LOGGING (
+	DATETIME VARCHAR(30), 
+	VIDEOTITLE VARCHAR(200), 
+	EVENTS VARCHAR(150)
+);
+```
+5. Inserting the records satisfying the validation conditions to the _RAW table, othering to the REJECTED_RECORDS_LOGGING table. Here the simple validation condition is being NOT NULL.
+```sql
+-- insert data from _RAW_STAGING to _RAW with validation conditions
+INSERT INTO VIDEOSTART_RAW (DATETIME, VIDEOTITLE, EVENTS)
+SELECT DATETIME, VIDEOTITLE, EVENTS
+FROM VIDEOSTART_RAW_STAGING
+WHERE DATETIME IS NOT NULL AND VIDEOTITLE IS NOT NULL AND EVENTS IS NOT NULL;  -- Add more validation as needed
+
+-- insert records not meeting validation conditions to REJECTED_RECORDS_LOGGING 
+INSERT INTO REJECTED_RECORDS_LOGGING (DATETIME, VIDEOTITLE, EVENTS)
+SELECT DATETIME, VIDEOTITLE, EVENTS
+FROM VIDEOSTART_RAW_STAGING
+WHERE DATETIME IS NULL OR VIDEOTITLE IS NULL OR EVENTS IS NULL;  -- Add more validation as needed
+
+TRUNCATE VIDEOSTART_RAW_STAGING;
+DROP TABLE VIDEOSTART_RAW_STAGING;
+```
+
+### Data Auditing
+
+We can run the following query to find out maximal length of the string in each column of VIDEOSTART_RAW.
+```sql
+SELECT MAX(LENGTH(DATETIME)),MAX(LENGTH(VIDEOTITLE)),MAX(LENGTH(EVENTS)) FROM VIDEOSTART_RAW;
 ```
