@@ -162,15 +162,15 @@ erDiagram
 ---
 ## ETL Process Design
 
-### Data Staging and Filtering
+### Data Staging and Validating
 We implement the validation conditions to filtering out bad records in the raw data.
 
 1. Create a VIDEOSTRAT_RAW_STAGING table to load the raw data
 ```sql
 CREATE TABLE VIDEOSTART_RAW_STAGING ( 
-  DATETIME  VARCHAR(30),
-  VIDEOTITLE  VARCHAR(200),
-  EVENTS  VARCHAR(150)
+  DATETIME  VARCHAR(300),
+  VIDEOTITLE  VARCHAR(300),
+  EVENTS  VARCHAR(300)
 );
 ```
 2. Write a bash file to load raw data from local machine (or EC2 instance) to MYSQL database VIDEOSTART_RAW_STAGING table.
@@ -230,17 +230,17 @@ fi
 4. Create a VIDEOSTRAT_RAW table to load the raw data that satisfying validation conditions, and a REJECTED_RECORDS_LOGGING table to store the rejected records that failed the validation conditions.
 ```sql
 CREATE TABLE VIDEOSTART_RAW ( 
-  DATETIME  VARCHAR(30),
-  VIDEOTITLE  VARCHAR(200),
-  EVENTS  VARCHAR(150)
+  DATETIME  VARCHAR(300),
+  VIDEOTITLE  VARCHAR(300),
+  EVENTS  VARCHAR(300)
 );
 CREATE TABLE REJECTED_RECORDS_LOGGING (
-	DATETIME VARCHAR(30), 
-	VIDEOTITLE VARCHAR(200), 
-	EVENTS VARCHAR(150)
+	DATETIME VARCHAR(300), 
+	VIDEOTITLE VARCHAR(300), 
+	EVENTS VARCHAR(300)
 );
 ```
-5. Inserting the records satisfying the validation conditions to the _RAW table, othering to the REJECTED_RECORDS_LOGGING table. Here the simple validation condition is being NOT NULL.
+5. Inserting the records satisfying the validation conditions to the _RAW table, otherwise to the REJECTED_RECORDS_LOGGING table. Here the simple validation condition is being NOT NULL.
 ```sql
 -- insert data from _RAW_STAGING to _RAW with validation conditions
 INSERT INTO VIDEOSTART_RAW (DATETIME, VIDEOTITLE, EVENTS)
@@ -264,3 +264,38 @@ We can run the following query to find out maximal length of the string in each 
 ```sql
 SELECT MAX(LENGTH(DATETIME)),MAX(LENGTH(VIDEOTITLE)),MAX(LENGTH(EVENTS)) FROM VIDEOSTART_RAW;
 ```
+output:
+| MAX(LENGTH(DATETIME)) | MAX(LENGTH(VIDEOTITLE)) | MAX(LENGTH(EVENTS)) |
+|:--:|:--:|:--:|
+| 24 | 157 | 95 |
+
+So we update the datatype size of each column:
+```sql
+ALTER TABLE VIDEOSTART_RAW MODIFY COLUMN DATETIME VARCHAR(30);
+ALTER TABLE VIDEOSTART_RAW MODIFY COLUMN VIDEOTITLE VARCHAR(250);
+ALTER TABLE VIDEOSTART_RAW MODIFY COLUMN EVENTS VARCHAR(150);
+```
+Next, we determine the distinct PLATFORM (or SITE)
+```sql
+-- identify the distinct PLATFORM (or SITE)
+-- note that the timezone `Z` is igonored due to MySQL does not handle it.
+SELECT DISTINCT B.PLATFORM FROM (
+	SELECT STR_TO_DATE(DATETIME,'%Y-%m-%dT%H:%i:%s.%f') AS "DATETIME",
+    TRIM(REGEXP_SUBSTR(VIDEOTITLE, '[^|]+')) AS "PLATFORM",
+    TRIM(REGEXP_SUBSTR(VIDEOTITLE, '[^|]*$')) AS "SITE",
+    EVENTS AS "EVENTS"
+    FROM VIDEOSTART_RAW
+    WHERE EVENTS LIKE '%206%'
+) AS B;
+```
+output:
+| B.PLATFORM |
+|:--:|
+| news |
+| App Web |
+| App Android |
+| App iPhone |
+| App iPad |
+
+
+
