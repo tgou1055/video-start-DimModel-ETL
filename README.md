@@ -182,7 +182,7 @@ CREATE TABLE VIDEOSTART_RAW_STAGING (
 DB_HOST="database-3.c1i000w28fpm.ap-southeast-2.rds.amazonaws.com"
 DB_USER="admin"
 DB_NAME="Video_Data"
-DB_PWD="tim628716"  # remove it when upload to git
+DB_PWD=""  # remove it when upload to git
 
 # Path to your data file
 DATA_FILE="./video_data_small.csv"
